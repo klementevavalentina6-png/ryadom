@@ -595,8 +595,17 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 const SUPABASE_URL     = 'https://shiny-paper-e485.klementevavalentina6.workers.dev';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4amdubmFzbWloc2ZycWtxcnR4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIyODcwNjIsImV4cCI6MjA4Nzg2MzA2Mn0.dP1rrvJtieAewYNZisds7sYhQw--HrOC1izjFmKmWJE';
 
+const _retryFetch = async (url, options) => {
+  for (let i = 0; i < 4; i++) {
+    try { return await fetch(url, options); } catch(e) {
+      if (i === 3) throw e;
+      await new Promise(r => setTimeout(r, 1500 * (i + 1)));
+    }
+  }
+};
+
 const sb = (typeof window.supabase !== 'undefined')
-  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { global: { fetch: _retryFetch } })
   : null;
 
 let currentPairId   = null;
