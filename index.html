@@ -592,27 +592,23 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 // ─── Supabase Config ──────────────────────────────────────────
 // ЗАМЕНИТЕ на ваши данные: Supabase → Project Settings → API
-const SUPABASE_URL     = 'https://shiny-paper-e485.klementevavalentina6.workers.dev';
+const SUPABASE_URL     = 'https://kxjgnnasmihsfrqkqrtx.supabase.co';
+const SUPABASE_WORKER  = 'https://shiny-paper-e485.klementevavalentina6.workers.dev';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4amdubmFzbWloc2ZycWtxcnR4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIyODcwNjIsImV4cCI6MjA4Nzg2MzA2Mn0.dP1rrvJtieAewYNZisds7sYhQw--HrOC1izjFmKmWJE';
 
-const _retryFetch = async (url, options) => {
-  for (let i = 0; i < 5; i++) {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 10000);
-    try {
-      const res = await fetch(url, { ...options, signal: ctrl.signal });
-      clearTimeout(timer);
-      return res;
-    } catch(e) {
-      clearTimeout(timer);
-      if (i < 4) { await new Promise(r => setTimeout(r, 800)); continue; }
-      throw new TypeError("Медленное соединение. Попробуйте ещё раз.");
-    }
+const _raceFetch = async (url, options) => {
+  const workerUrl = url.replace(SUPABASE_URL, SUPABASE_WORKER);
+  const attempts = [fetch(url, options)];
+  if (workerUrl !== url) attempts.push(fetch(workerUrl, options));
+  try {
+    return await Promise.any(attempts);
+  } catch(e) {
+    throw new TypeError("Нет соединения. Проверьте интернет.");
   }
 };
 
 const sb = (typeof window.supabase !== 'undefined')
-  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { global: { fetch: _retryFetch } })
+  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { global: { fetch: _raceFetch } })
   : null;
 
 let currentPairId   = null;
