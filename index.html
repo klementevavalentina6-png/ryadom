@@ -361,8 +361,8 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 
 <section id="today" class="tab-content active">
 <div class="card">
-<div class="grid-2">
-<div>
+<div id="today-fields">
+<div id="section-a">
 <h3 id="labelA">Партнёр A</h3>
 <input type="number" id="a_resource" placeholder="Качество сна (0–10)" min="0" max="10">
 <input type="number" id="a_energy" placeholder="Энергия (0–10)" min="0" max="10">
@@ -370,7 +370,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <input type="number" id="a_conflict" placeholder="Конфликтность (0–10)" min="0" max="10">
 <textarea id="a_note" placeholder="Заметка"></textarea>
 </div>
-<div>
+<div id="section-b" style="margin-top:16px;">
 <h3 id="labelB">Партнёр B</h3>
 <input type="number" id="b_resource" placeholder="Качество сна (0–10)" min="0" max="10">
 <input type="number" id="b_energy" placeholder="Энергия (0–10)" min="0" max="10">
@@ -755,7 +755,13 @@ document.getElementById("saveDay").addEventListener("click", function() {
     note:      document.getElementById(p+"_note").value
   });
   const actions = [...document.querySelectorAll(".actions-list input:checked")].map(cb => cb.value);
-  const day = { partnerA: get("a"), partnerB: get("b"), actions };
+  const myKey = currentUserRole || "a";
+  const existing = currentData.entries[todayKey()] || {};
+  const day = {
+    partnerA: myKey === "a" ? get("a") : (existing.partnerA || { resource:0, energy:0, closeness:0, conflict:0, note:"" }),
+    partnerB: myKey === "b" ? get("b") : (existing.partnerB || { resource:0, energy:0, closeness:0, conflict:0, note:"" }),
+    actions
+  };
   day.index = calculateIndex(day);
   currentData.entries[todayKey()] = day;
   saveData(currentData);
@@ -2752,6 +2758,32 @@ document.getElementById("auth_nopair_join_btn").addEventListener("click", async 
 
 // ─── Supabase: синхронизация данных ──────────────────────────
 
+function setupTodayForRole() {
+  const role = currentUserRole;
+  if (!role) return;
+  const mySection    = document.getElementById("section-" + role);
+  const theirSection = document.getElementById("section-" + (role === "a" ? "b" : "a"));
+  const container    = document.getElementById("today-fields");
+
+  // Своя секция — первой
+  container.insertBefore(mySection, container.firstChild);
+  mySection.style.marginTop = "0";
+  theirSection.style.marginTop = "20px";
+
+  // Метки
+  mySection.querySelector("h3").textContent   = "Мои данные";
+  const names = JSON.parse(localStorage.getItem("ryadom_names") || "{}");
+  const partnerName = role === "a" ? (names.b || "Партнёр") : (names.a || "Партнёр");
+  theirSection.querySelector("h3").textContent = partnerName;
+
+  // Поля партнёра — только чтение
+  theirSection.querySelectorAll("input, textarea").forEach(el => {
+    el.disabled = true;
+    el.style.opacity = "0.55";
+    el.style.cursor  = "default";
+  });
+}
+
 async function syncFromSupabase() {
   // Повтор до 4 раз при медленной сети
   for (let attempt = 1; attempt <= 4; attempt++) {
@@ -2878,6 +2910,7 @@ async function onAuthSuccess() {
   document.getElementById("syncBtn").style.display = "inline-flex";
   document.getElementById("logoutBtn").style.display = "inline-flex";
 
+  setupTodayForRole();
   renderAll();
   updateActionsCounter();
   applyNames();
