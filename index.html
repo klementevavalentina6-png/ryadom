@@ -669,13 +669,12 @@ function loadData() {
   }
 }
 
-function saveData(data) {
+async function saveData(data) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  // Синхронизация с Supabase
   if (sb && currentPairId && SUPABASE_URL !== 'YOUR_SUPABASE_PROJECT_URL') {
-    sb.from("pair_state")
-      .upsert({ pair_id: currentPairId, data, updated_at: new Date().toISOString() }, { onConflict: "pair_id" })
-      .then(({ error }) => { if (error) console.error("Supabase saveData:", error.message); });
+    const { error } = await sb.from("pair_state")
+      .upsert({ pair_id: currentPairId, data, updated_at: new Date().toISOString() }, { onConflict: "pair_id" });
+    if (error) console.error("Supabase saveData:", error.message);
   }
 }
 
@@ -784,9 +783,10 @@ document.getElementById("saveDay").addEventListener("click", async function() {
   };
   day.index = calculateIndex(day);
   currentData.entries[todayKey()] = day;
-  saveData(currentData);
 
   const status = document.getElementById("saveStatus");
+  status.textContent = "Сохраняю…";
+  await saveData(currentData);
   status.textContent = `✓ Сохранено. Индекс дня: ${day.index}`;
   setTimeout(() => { status.textContent = ""; }, 3000);
 
@@ -2849,6 +2849,20 @@ async function syncFromSupabase() {
   }
 }
 
+function renderPartnerSection() {
+  if (!currentUserRole) return;
+  const partnerPrefix = currentUserRole === "a" ? "b" : "a";
+  const entry = currentData.entries[todayKey()];
+  const partnerData = entry ? (partnerPrefix === "a" ? entry.partnerA : entry.partnerB) : null;
+  if (!partnerData) return;
+  ["resource","energy","closeness","conflict"].forEach(f => {
+    const el = document.getElementById(partnerPrefix + "_" + f);
+    if (el) el.value = partnerData[f] ?? "";
+  });
+  const note = document.getElementById(partnerPrefix + "_note");
+  if (note) note.value = partnerData.note ?? "";
+}
+
 function subscribeToRealtime() {
   sb.channel("pair-" + currentPairId)
     .on("postgres_changes", {
@@ -2858,7 +2872,11 @@ function subscribeToRealtime() {
       if (payload.new?.data) {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(payload.new.data));
         currentData = loadData();
-        renderAll();
+        // Обновляем только поля партнёра — свои поля не трогаем
+        renderPartnerSection();
+        renderCalendar();
+        renderChart();
+        renderForecast();
       }
     })
     .subscribe();
@@ -2973,13 +2991,17 @@ async function initApp() {
     return;
   }
 
-  // Проверяем сессию
-  const { data: { session } } = await sb.auth.getSession();
-  if (!session) {
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) {
+      showAuthOverlay();
+      return;
+    }
+    await onAuthSuccess();
+  } catch(e) {
+    console.error("initApp error:", e);
     showAuthOverlay();
-    return;
   }
-  await onAuthSuccess();
 }
 
 // ─── Запуск ───────────────────────────────────────────────────
